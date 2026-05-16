@@ -12,7 +12,7 @@ The shape of this module:
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue
 
-from embeddings import embed_query
+from .embeddings import embed_query
 
 COLLECTION_NAME = "studybuddy"
 
@@ -59,6 +59,7 @@ def search(
             "text": hit.payload["text"],
             "source": hit.payload["source"],
             "chunk_index": hit.payload["chunk_index"],
+            "page": hit.payload.get("page"),
             "score": float(hit.score),
         }
         for hit in results

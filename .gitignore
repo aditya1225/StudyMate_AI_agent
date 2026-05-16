@@ -1,0 +1,20 @@
+# Secrets
+.env
+.claude
+# Qdrant storage (mounted from docker-compose)
+qdrant_data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Editors
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

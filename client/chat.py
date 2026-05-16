@@ -1,13 +1,18 @@
 import asyncio
-from anthropic import Anthropic
-from mcp_client import MCPBridge
 
-anthropic = Anthropic()
+from dotenv import load_dotenv
+
+load_dotenv()  # picks up ANTHROPIC_API_KEY from .env before Anthropic() reads env
+
+from .llm import LLM
+from .mcp_client import MCPBridge
+
 
 async def chat():
+    llm = LLM()
     async with MCPBridge(["python", "-m", "server.main"]) as mcp:
         tools = await mcp.list_tools()
-        messages = []
+        messages: list[dict] = []
 
         while True:
             user = input("\nYou: ").strip()
@@ -17,22 +22,23 @@ async def chat():
 
             # Inner loop: keep going until Claude stops calling tools
             while True:
-                resp = anthropic.messages.create(
-                    model="claude-sonnet-4-5",
-                    max_tokens=2048,
-                    tools=tools,
-                    messages=messages,
-                )
+                try:
+                    resp = llm.respond(messages, tools)
+                except Exception as e:
+                    # Don't kill the MCP session over a transient API error
+                    # (rate limit, no credits, network blip). Drop the
+                    # unanswered user turn so the next prompt is clean.
+                    print(f"\n[llm error] {e}")
+                    messages.pop()
+                    break
                 messages.append({"role": "assistant", "content": resp.content})
 
                 if resp.stop_reason != "tool_use":
-                    # Print final text answer
                     for block in resp.content:
                         if block.type == "text":
                             print(f"\nClaude: {block.text}")
                     break
 
-                # Execute every tool call Claude requested
                 tool_results = []
                 for block in resp.content:
                     if block.type == "tool_use":
@@ -44,6 +50,7 @@ async def chat():
                             "content": "\n".join(output),
                         })
                 messages.append({"role": "user", "content": tool_results})
+
 
 if __name__ == "__main__":
     asyncio.run(chat())

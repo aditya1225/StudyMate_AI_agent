@@ -1,9 +1,23 @@
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+import os
+import sys
 
 class MCPBridge:
     def __init__(self, server_cmd: list[str]):
-        self.params = StdioServerParameters(command=server_cmd[0], args=server_cmd[1:])
+        # If the command is bare "python", swap it for sys.executable so the
+        # subprocess uses the SAME interpreter as the client. Otherwise on
+        # Windows you can end up spawning a different Python that doesn't
+        # have mcp / qdrant-client / sentence-transformers installed, and
+        # the server dies on import before the handshake completes.
+        cmd = server_cmd[0]
+        if cmd in ("python", "python3", "py"):
+            cmd = sys.executable
+        self.params = StdioServerParameters(
+            command=cmd,
+            args=server_cmd[1:],
+            env=dict(os.environ),  # explicitly inherit parent env
+        )
         self.session = None
 
     async def __aenter__(self):

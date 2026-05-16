@@ -28,9 +28,11 @@ def get_embedder() -> SentenceTransformer:
     regardless of how many times it's called. The first call pays the cost;
     every later call returns the same instance instantly.
     """
-    print(f"[embeddings] Loading {MODEL_NAME}...")
+    # stderr, not stdout: when this module runs inside the MCP server,
+    # stdout is the JSONRPC wire and any stray print corrupts it.
+    print(f"[embeddings] Loading {MODEL_NAME}...", file=sys.stderr)
     model = SentenceTransformer(MODEL_NAME)
-    print("[embeddings] Ready.")
+    print("[embeddings] Ready.", file=sys.stderr)
     return model
 
 
