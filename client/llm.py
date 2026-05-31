@@ -1,46 +1,88 @@
 """
-Thin wrapper around the Anthropic API for the chat client.
+LLM client — provider-agnostic via LangChain.
 
-Why pull this out of chat.py:
-    - The system prompt and model choice are the things you actually want to
-      tweak; keeping them next to the loop makes both noisier.
-    - Tests / eval scripts can import LLM without dragging in the MCP bridge.
+The chat loop (chat.py) only depends on `make_llm()` returning a
+LangChain `BaseChatModel`. Swap the implementation here to change
+providers without touching the agent loop.
+
+Why LangChain at all:
+    LangChain normalizes message shapes, tool calls, and streaming across
+    providers. The same `create_react_agent` works against Anthropic,
+    OpenAI, Google, or a local Ollama model with one import + one
+    constructor change.
+
+What's still Anthropic-specific:
+    Prompt caching (`cache_control`) is an Anthropic feature. Other
+    providers will ignore the cache_control hint on the system prompt.
+    When you swap providers you lose that cost optimization automatically.
 """
 
-from anthropic import Anthropic
+from langchain_anthropic import ChatAnthropic
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import SystemMessage
 
 DEFAULT_MODEL = "claude-sonnet-4-5"
 
-SYSTEM_PROMPT = """\
-You are StudyBuddy, a study assistant grounded in the user's personal notes
-and textbooks.
+SYSTEM_PROMPT_TEXT = """\
+You are StudyBuddy, a study assistant grounded ONLY in the user's personal
+notes and textbooks. You are not allowed to answer from your own prior
+knowledge.
 
 Rules:
-- For anything the user could plausibly have notes on, call `search_notes`
-  before answering. Don't rely on your own knowledge when their corpus could
-  contain the answer.
-- If the first search misses, try a reworded query before giving up. You can
-  also call `list_documents` to see what's available.
+- Always call `search_notes` first. If the first query misses, try one or
+  two reworded queries. You can also call `list_documents` to see what's
+  available.
+- If `search_notes` errors or returns nothing useful, say so plainly and
+  STOP. Do not fall back to your own knowledge, even if you know the
+  answer. Report the failure and let the user decide what to do.
 - Cite every claim you take from the corpus inline as
   `(source.pdf, p. <page>)`. If a chunk has no page, cite just the source.
-- If the search returns nothing useful, say so plainly — don't invent.
 - Keep answers concise. The user is studying, not reading prose.
 """
 
 
-class LLM:
-    def __init__(self, model: str = DEFAULT_MODEL, system: str = SYSTEM_PROMPT):
-        self._client = Anthropic()
-        self.model = model
-        self.system = system
+def make_llm() -> BaseChatModel:
+    """Build the chat model. This is the only place to swap providers.
 
-    def respond(self, messages: list[dict], tools: list[dict], max_tokens: int = 2048):
-        """One Anthropic call. Returns the raw response so the caller can
-        inspect stop_reason and content blocks."""
-        return self._client.messages.create(
-            model=self.model,
-            max_tokens=max_tokens,
-            system=self.system,
-            tools=tools,
-            messages=messages,
-        )
+    Current: Anthropic Claude Sonnet 4.5.
+
+    To swap:
+        # OpenAI
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(model="gpt-4o", temperature=0)
+
+        # Google Gemini
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        return ChatGoogleGenerativeAI(model="gemini-1.5-pro")
+
+        # Local via Ollama (free, runs on your machine)
+        from langchain_ollama import ChatOllama
+        return ChatOllama(model="llama3.1:8b")
+
+    Each provider reads its own API key from env:
+        ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY, ...
+    """
+    return ChatAnthropic(
+        model=DEFAULT_MODEL,
+        max_tokens=2048,
+        timeout=60,
+    )
+
+
+def make_system_message() -> SystemMessage:
+    """Build the system message with provider-aware caching.
+
+    The `cache_control` block tells Anthropic to cache everything up to and
+    including the system prompt (tools render first, so they're cached
+    too). Other providers receive a plain text system prompt — the
+    cache_control field is silently ignored on the LangChain side.
+    """
+    return SystemMessage(
+        content=[
+            {
+                "type": "text",
+                "text": SYSTEM_PROMPT_TEXT,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
+    )

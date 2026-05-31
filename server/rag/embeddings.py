@@ -12,6 +12,7 @@ Why we lazy-load and cache:
     - Loading once at import time means subsequent calls are fast
 """
 
+import sys
 from functools import lru_cache
 from sentence_transformers import SentenceTransformer
 

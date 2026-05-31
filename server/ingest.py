@@ -17,8 +17,14 @@ source before upserting the new ones.
 """
 
 import argparse
+import sys
 import uuid
+from functools import partial
 from pathlib import Path
+
+# All [ingest] prints go to stderr so this module can be safely imported
+# and called from the MCP server (whose stdout is the JSONRPC wire).
+log = partial(print, file=sys.stderr)
 
 from pypdf import PdfReader
 from qdrant_client import QdrantClient

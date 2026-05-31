@@ -46,9 +46,12 @@ def search(
             must=[FieldCondition(key="source", match=MatchValue(value=source_filter))]
         )
 
-    results = qdrant.search(
+    # qdrant-client >=1.13 removed .search() in favor of .query_points().
+    # The shape differs slightly: query_points() returns a QueryResponse
+    # whose `.points` field holds the hits.
+    response = qdrant.query_points(
         collection_name=COLLECTION_NAME,
-        query_vector=query_vector,
+        query=query_vector,
         limit=top_k,
         query_filter=qdrant_filter,
         with_payload=True,
@@ -62,7 +65,7 @@ def search(
             "page": hit.payload.get("page"),
             "score": float(hit.score),
         }
-        for hit in results
+        for hit in response.points
     ]
 
 

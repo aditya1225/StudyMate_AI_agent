@@ -1,6 +1,17 @@
 mcp>=1.0.0
-anthropic>=0.39.0
 qdrant-client>=1.12.0
 sentence-transformers>=3.0.0
 pypdf>=5.0.0
 python-dotenv>=1.0.0
+
+# LangChain stack — swap LLM provider by editing client/llm.py only.
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-anthropic>=0.3.0
+langchain-mcp-adapters>=0.1.0
+langgraph>=0.2.0
+# anthropic is pulled in as a transitive dep of langchain-anthropic.
+# To swap provider, install one of:
+#   langchain-openai          (ChatOpenAI)
+#   langchain-google-genai    (ChatGoogleGenerativeAI)
+#   langchain-ollama          (ChatOllama — local models)
