@@ -10,7 +10,7 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
-private/
+private
 
 # Editors
 .idea/
